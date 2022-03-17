@@ -1,0 +1,200 @@
+local btns = {}
+
+local txt_apostas
+local txt_creditos
+
+local creditos
+local apostas
+
+local automatico
+local idle
+
+local slots = {}
+
+local function update_slots()
+    --atualiza os slots dps de umajogada
+    for j = 1, 5 do -- for pras colunas
+
+        local parent = gui.get_node(j)
+        gui.set_position(parent, vmath.vector3(gui.get_position(parent).x, 0, 0))--sobe a coluna pra posição inicial
+
+        for i = 1, 5 do --só copia os slots de cima pra quando subir continuar nos msm valores 
+            local slot_n = "" .. j .. "-" .. i
+            gui.play_flipbook(slots[j][slot_n], gui.get_flipbook(slots[j]["" .. j .. "-" .. i + 28]))
+        end
+
+        for i = 6, 33 do --cria novos slots aleatorios 
+            slot_n = "" .. j .. "-" .. i
+            gui.delete_node(slots[j][slot_n])
+            slots[j][slot_n] = gui.new_box_node(vmath.vector3(0, -750 + (i * 250), 0), vmath.vector3(0, 0, 0))
+            gui.set_size_mode(slots[j][slot_n],  gui.SIZE_MODE_AUTO)
+            gui.set_parent(slots[j][slot_n], parent, false)
+            gui.set_inherit_alpha(slots[j][slot_n], false)
+            gui.set_texture(slots[j][slot_n], "slots")
+            gui.play_flipbook(slots[j][slot_n], "slot" .. math.random(1, 10))
+        end
+
+    end
+end
+
+local function play(s)
+    s = s or 0 --define um delay padrão
+    
+    if idle then --checa se os slots tão parados pra não reniciar no meio da animação 
+        idle = false
+
+        timer.delay(s, false, function()
+            --atualiza os status
+
+            creditos = creditos-apostas
+            gui.set_text(txt_creditos, "CREDITOS: " .. creditos)
+
+            --desce as colunas de slots
+            for c = 1, 5 do
+                gui.animate(gui.get_node(c), "position.y", -1000, gui.EASING_INBACK, .7, c * 0.1, function()
+                    gui.animate(gui.get_node(c), "position.y", -6000, gui.EASING_LINEAR, .5, 0, function()
+                        gui.animate(gui.get_node(c), "position.y", -7000, gui.EASING_OUTBACK, .7, 0, function()                            
+                            if c == 5 then
+                                update_slots()
+                                idle = true
+                            end
+                        end)
+                    end)
+                end)
+            end
+
+        end)
+    end
+
+end
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+
+    --hud
+    --botões
+    btns = {jogar = gui.get_node("jogar"),
+          jogar_auto = gui.get_node("jogar-auto"),
+          aumentar = gui.get_node("aumentar-aposta"),
+          diminuir = gui.get_node("diminuir-apostas"),
+          fullscreen = gui.get_node("fullscreen")
+    } 
+    -- textos
+    txt_apostas = gui.get_node("apostas")
+    txt_creditos = gui.get_node("creditos")
+
+    creditos = 100
+    apostas = 0
+
+    --status de jogo
+    automatico = false
+    idle = true -- se os slots estão se movendo
+
+    math.randomseed(os.time())
+    --cria os primeiros slots
+    for j = 1, 5 do
+        local parent = gui.get_node(j) -- é node que armazena os slots em coluna
+
+        gui.set_position(parent,vmath.vector3(gui.get_position(parent).x, 0, 0)) -- reseto a posição da coluna
+        slots[j] = {} -- crio uma tabela pra armazenar os slots dessa coluna
+        
+        for i = 1, 33 do 
+            local slot_n = "" .. j .. "-" .. slot -- nome do slot, leva o nome do pai mais a uma numeração, exemplo: 1-2
+            slots[j][slot_n] = gui.new_box_node(vmath.vector3(0, -750 + (i * 250), 0), vmath.vector3(0, 0, 0))
+            gui.set_size_mode(slots[j][slot_n], gui.SIZE_MODE_AUTO)
+            gui.set_parent(slots[j][slot_n], parent, false)
+            gui.set_inherit_alpha(slots[j][slot_n], false)
+            gui.set_texture(slots[j][slot_n], "slots")
+            gui.play_flipbook(slots[j][slot_n], "slot" .. math.random(1, 10))
+        end
+
+    end 
+    
+end
+
+function update(self, dt)
+    --caso tiver o automatico ligado
+    if automatico and idle then
+        if apostas > creditos or apostas == 0 then
+            automatico = false
+            gui.play_flipbook(btns.jogar_auto, "autoplay")
+            gui.set_text(txt_apostas, "CREDITOS INSUFICIENTES")
+            gui.set_color(txt_apostas, vmath.vector3(1, 0, 0))
+
+            timer.delay(1, false, function()
+                gui.set_text(txt_apostas, "APOSTAS: " .. apostas)
+                gui.set_color(txt_apostas, vmath.vector3(1, 1, 1))
+            end)
+
+        else
+            play(0.4)
+        end
+
+    end
+
+end
+
+
+function on_input(self, action_id, action)
+	if action_id == hash("touch") and action.pressed then
+        if gui.pick_node(btns.jogar, action.x, action.y) and idle then
+            if apostas > creditos or apostas == 0 then
+                gui.set_text(txt_apostas, "CREDITOS INSUFICIENTES")
+                gui.set_color(txt_apostas, vmath.vector3(1, 0, 0))
+
+                timer.delay(1, false, function()
+                    gui.set_text(txt_apostas, "APOSTAS: " .. apostas)
+                    gui.set_color(txt_apostas, vmath.vector3(1, 1, 1))
+                end)
+
+            else
+                play()
+            end
+            
+		elseif gui.pick_node(btns.jogar_auto, action.x, action.y) then
+            if  automatico then
+                if apostas > creditos or apostas == 0 then
+                    gui.set_text(txt_apostas, "CREDITOS INSUFICIENTES")
+                    gui.set_color(txt_apostas, vmath.vector3(1, 0, 0))
+
+                    timer.delay(1, false, function()
+                        gui.set_text(txt_apostas, "APOSTAS: " .. apostas)
+                        gui.set_color(txt_apostas, vmath.vector3(1, 1, 1))
+                    end)
+
+                else
+                    automatico = false
+                    gui.play_flipbook( btns.jogar_auto, "autoplay")
+                end
+
+            else
+                automatico = true
+                gui.play_flipbook( btns.jogar_auto, "stop_autoplay")
+            end
+
+        elseif gui.pick_node(btns.aumentar, action.x, action.y) then
+            if apostas < creditos then
+                apostas = apostas + 1
+                gui.set_text(txt_apostas, "APOSTAS: " .. apostas)
+            end
+
+        elseif gui.pick_node(btns.diminuir, action.x, action.y) then
+            if apostas > 0 then
+                apostas = apostas - 1
+                gui.set_text(txt_apostas, "APOSTAS: " .. apostas)
+            end
+
+        elseif gui.pick_node(btns.fullscreen, action.x, action.y) then
+            if defos.is_fullscreen() then
+                defos.set_fullscreen(false)
+                gui.play_flipbook( btns.fullscreen, "fullscreen_in")
+            else
+                defos.set_fullscreen(true)
+                gui.play_flipbook( btns.fullscreen, "fullscreen_out")
+            end
+
+        end
+   
+	end
+end
+
